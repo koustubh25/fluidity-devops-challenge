@@ -59,9 +59,11 @@ Prerequisite: Should have docker running on your local
 1. Running `make challenge` runs a `docker-compose up` internally. However, this will most likely overwhelm you with logs. <br/>
 A preferred way of running this is `make calculate`.
 This will start all the services in the right order and will immediately start populating your `timescaledb` db. Services include `kafka` and `timescaledb`
-<br/> In-effect, it's the same as `make challenge` except you only see logs for the `calculate-avg-compute-units` service.   
+<br/> In-effect, it's the same as `make challenge` except you only see logs for the `calculate-avg-compute-units` service.
    
-2. Other individual make recipes can be found in the [Makefile](Makefile)
+2. On few occasions, I have seen this error `2022/04/25 08:07:45 Failed to read a JSON message off the Solana websocket!` in the connector service. Just give it a couple of minutes for the container to restart in the event of a failure. It should work fine after the restart. This all happens automatically.
+   
+3. Other individual make recipes can be found in the [Makefile](Makefile)
 
 ## Improvements that can be made
 
