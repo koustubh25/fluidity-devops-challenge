@@ -1,0 +1,89 @@
+version: "3.9"
+services:
+  timescaledb:
+    container_name: timescaledb
+    hostname: timescaledb
+    build: ./migrations
+    restart: on-failure
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - type: volume
+        source: timescale-db-volume
+        target: /var/lib/postgresql/data # location in the container where the data is stored
+        read_only: false
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  solana-connector:
+    container_name: solana-connector
+    hostname: solana-connector
+    build: ./cmd/solana-logs-connector
+    restart: on-failure
+    depends_on:
+      kafka:
+        condition: service_healthy
+      convert: # this dependency is needed to automatically create topics if not present
+        condition: service_started
+    environment:
+      - FLU_SOLANA_WEBSOCKET_URL=wss://api.mainnet-beta.solana.com
+      - FLU_KAFKA_LEADER=kafka:9092
+
+
+  calculate-avg-compute-units:
+    container_name: calculate-avg-compute-units
+    hostname: calculate-avg-compute-units
+    build: ./cmd/calculate-average-compute-units
+    restart: on-failure
+    depends_on:
+      kafka:
+        condition: service_healthy
+      convert:
+        condition: service_started
+      solana-connector:
+        condition: service_started
+      timescaledb:
+        condition: service_healthy
+    environment:
+      - FLU_KAFKA_LEADER=kafka:9092
+      - FLU_TIMESCALE_URI=host=timescaledb port=5432 user=postgres sslmode=disable password=${POSTGRES_PASSWORD}
+
+  convert:
+    container_name: convert
+    hostname: convert
+    build: ./cmd/convert-solana-logs-to-compute-units
+    restart: on-failure
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - FLU_KAFKA_LEADER=kafka:9092
+
+  zookeeper:
+    image: docker.io/bitnami/zookeeper:3.8
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    restart: on-failure
+  kafka:
+    container_name: kafka
+    hostname: kafka
+    image: bitnami/kafka:2.8.1
+    restart: on-failure
+    depends_on:
+      - zookeeper
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    healthcheck:
+      test: [ "CMD-SHELL", "kafka-topics.sh  --list  --zookeeper zookeeper:2181" ]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+# Uses a named volume to persist our data
+volumes:
+  timescale-db-volume:
